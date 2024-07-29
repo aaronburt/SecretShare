@@ -1,0 +1,14 @@
+/* encrypt.css */
+
+input[type="text"], input[type="button"] {
+    display: block;
+    margin: 10px 0;
+    padding: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#encryptedResult {
+    margin-top: 20px;
+    font-weight: bold;
+}

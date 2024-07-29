@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secret Share</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js" integrity="sha512-a+SUDuwNzXDvz4XrIcXHuCf089/iJAoN4lmrXJg18XnduKK6YlDHNRalv4yd1N40OKI80tFidF+rqTFKGPoWFQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link rel="stylesheet" href="/public/css/navbar.css"/>
+    <link rel="stylesheet" href="/public/css/common.css"/>
+    <link rel="stylesheet" href="/public/css/encrypt.css"/>
+
+    <link rel="icon" type="image/x-icon" href="/public/favicon/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/pubilc/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/pubilc/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/pubilc/favicon/favicon-16x16.png">
+    <link rel="manifest" href="/public/favicon/site.webmanifest">
+
+</head>
+<body>
+    <nav>
+        <a href="/encrypt">Encrypt</a>
+        <a href="/decrypt">Decrypt</a>
+    </nav>
+    
+    <h1>Secret Share</h1>
+    
+    <div id="encryptionSection">
+        <h2>Encryption</h2>
+        <label for="plainText">Plaintext:</label>
+        <input type="text" id="plainText" placeholder="Enter text to encrypt" required>
+
+        <label for="secretKey">Secret Key (Hex):</label>
+        <input type="text" id="secretKey" placeholder="Enter a 64-character hex key" required>
+
+        <label for="iv">IV (Hex):</label>
+        <input type="text" id="iv" placeholder="Enter a 32-character hex IV" required>
+
+        <input type="button" value="Encrypt" onclick="encryptText()">
+    </div>
+
+    <div id="securityConsiderations">
+        <h2>Security Considerations</h2>
+        <p>The security of the Secret Share system is based on the principle of keeping sensitive data secure by ensuring that only encrypted information is transmitted over the network. Here’s how it works:</p>
+        <ul>
+            <li><strong>Encryption at Source:</strong> When you provide plaintext, a secret key, and an initialization vector (IV), the plaintext is encrypted on your browser using the AES algorithm before being sent to the server.</li>
+            <li><strong>Data Transmission:</strong> Only the encrypted data is sent to the server. The plaintext, secret key, and IV are never transmitted over the network, ensuring that sensitive information is not exposed during transmission.</li>
+            <li><strong>Server Storage:</strong> The server only stores the encrypted data. It has no access to the plaintext or the encryption key, making it impossible for the server to decrypt the data without the necessary key and IV.</li>
+            <li><strong>Access Control:</strong> To decrypt the data, you will need the same secret key and IV used for encryption. This means that even if someone intercepts the encrypted data, they cannot decrypt it without the key and IV.</li>
+        </ul>
+    </div>
+
+    <div id="whatWeSent" style="display: none;">
+        <h2>What We Sent</h2>
+        <h4>This is what was sent to the server via POST /api/v1/secret/create</h4>
+        <pre id="whatWeSentContent"></pre>
+    </div>
+
+    <div id="outputLink"></div>
+
+    <div id="errorText"></div>
+
+    <script>
+        function hexToWordArray(hexString) {
+            return CryptoJS.enc.Hex.parse(hexString);
+        }
+
+        function wordArrayToHex(wordArray) {
+            return CryptoJS.enc.Hex.stringify(wordArray);
+        }
+
+        async function encryptText() {
+            const plainText = document.getElementById('plainText').value.trim();
+            const secretKeyHex = document.getElementById('secretKey').value.trim();
+            const ivHex = document.getElementById('iv').value.trim();
+            const errorText = document.getElementById('errorText');
+
+            errorText.innerText = ''; // Clear previous error message
+
+            // Validate plaintext length
+            if (plainText.length === 0) {
+                errorText.innerText = 'Plaintext cannot be empty.';
+                return;
+            } else if (plainText.length > 2048) {
+                errorText.innerText = 'Plaintext cannot exceed 2048 characters.';
+                return;
+            }
+
+            // Validate key and IV length
+            if (secretKeyHex.length !== 64 || ivHex.length !== 32) {
+                errorText.innerText = 'Secret Key must be 64 characters and IV must be 32 characters long.';
+                return;
+            }
+
+            const key = hexToWordArray(secretKeyHex);
+            const iv = hexToWordArray(ivHex);
+
+            const encrypted = CryptoJS.AES.encrypt(plainText, key, {
+                iv: iv,
+                mode: CryptoJS.mode.CTR,
+                padding: CryptoJS.pad.NoPadding
+            });
+
+            const encryptedHex = encrypted.ciphertext.toString(CryptoJS.enc.Hex);
+            await submitEncryptedText(encryptedHex, secretKeyHex, ivHex);
+
+            // Hide the "Security Considerations" section and show the "What We Sent" section
+            document.getElementById('securityConsiderations').style.display = 'none';
+            document.getElementById('encryptionSection').style.display = 'none';
+            document.getElementById('whatWeSent').style.display = 'block';
+        }
+
+        async function submitEncryptedText(encryptedTextHex, secretKeyHex, ivHex) {
+            try {
+                const response = await fetch('/api/v1/secret/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ secretData: encryptedTextHex })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const result = await response.json();
+                const id = result.id;
+
+                showWhatWeSent(encryptedTextHex, id);
+                setQueryLink(id);
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('errorText').innerText = 'An error occurred while sending the data.';
+            }
+        }
+
+        function showWhatWeSent(encryptedTextHex, id) {
+            const whatWeSentContent = document.getElementById('whatWeSentContent');
+            whatWeSentContent.innerHTML = JSON.stringify({ 
+                encryptedData: encryptedTextHex,
+            }, null, 2);
+        }
+
+        function setQueryLink(id) {
+            const secretKey = document.getElementById('secretKey').value.trim();
+            const iv = document.getElementById('iv').value.trim();
+            const queryLink = `decrypt?id=${id}&secret=${encodeURIComponent(secretKey)}&iv=${encodeURIComponent(iv)}`;
+            
+            // Find the element to display the link
+            const outputLinkElement = document.getElementById('outputLink');
+
+            // Set the queryLink as a clickable link
+            outputLinkElement.innerHTML = `<h3>Decryption Page Link:</h3><a style="overflow-wrap: break-word;" href="${queryLink}" target="_blank">${queryLink}</a>`;
+        }
+
+        function rotateExampleValues() {
+            function generateRandomHex(length) {
+                const bytes = new Uint8Array(length / 2);
+                window.crypto.getRandomValues(bytes);
+                return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+            }
+
+            const secretKeyHex = generateRandomHex(64); // Generate a 64-character hex key
+            const ivHex = generateRandomHex(32); // Generate a 32-character hex IV
+
+            document.getElementById('secretKey').value = secretKeyHex;
+            document.getElementById('iv').value = ivHex;
+        }
+
+        // Call functions on page load
+        window.onload = function() {
+            rotateExampleValues();
+        };
+    </script>
+</body>
+</html>
