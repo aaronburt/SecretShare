@@ -19,14 +19,9 @@ To run the application locally, follow these steps:
    cd secret-share
    ```
 
-2. **Install dependencies**:
+2. **Install & Run**:
    ```bash
-   npm install
-   ```
-
-3. **Start the server**:
-   ```bash
-   npm start
+   docker compose up --build
    ```
 
 4. **Open your browser** and navigate to `http://localhost`.
